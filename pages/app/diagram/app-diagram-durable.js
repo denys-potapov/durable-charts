@@ -1,10 +1,4 @@
-import { AppDiagramPngMixin } from './app-diagram-png-mixin.js';
-
-/**
- * @implements {IAppDiagramSerializable}
- * @mixes AppDiagramPngMixin
- */
-export class AppDiagramSerializable extends EventTarget {
+export class AppDiagramDurable extends EventTarget {
 	/**
 	 * @param {SVGSVGElement} svg
 	 * @param {IDiagram} diagram
@@ -200,8 +194,3 @@ function connectorEqual(con1, con2) {
 	return con1.start.shape === con2.start.shape && con1.start.key === con2.start.key &&
 	con1.end.shape === con2.end.shape && con1.end.key === con2.end.key;
 }
-
-//
-// Mixin
-
-Object.assign(AppDiagramSerializable.prototype, AppDiagramPngMixin);
