@@ -31,7 +31,8 @@ export class AppDiagramDurable extends EventTarget {
 	 * @param {CustomEvent<ShapeTextEditorDecoratorEventUpdateDetail> & CustomEvent<IDiagramEventConnectDetail>} evt
 	 */
 	handleEvent(evt) {
-		console.log(evt);
+		console.log(evt, this._shapeData.get(evt.detail.target));
+		console.log(this._shapeData);
 		switch (evt.type) {
 			case 'add':
 				/** @type {IShapeTextEditorDecorator} */(evt.detail.target)
@@ -70,6 +71,7 @@ export class AppDiagramDurable extends EventTarget {
 	 * @returns {IDiagramShape}
 	 */
 	shapeAdd(param) {
+		console.log(param);
 		const shape = this._diagram.shapeAdd(param);
 
 		this._shapeData.set(
@@ -81,7 +83,8 @@ export class AppDiagramDurable extends EventTarget {
 
 		this.dispatchEvent(new CustomEvent('shapeAdd', {
 			cancelable: true,
-			detail: shape
+			detail: shape,
+			param: param
 		}));
 
 		return shape;
@@ -92,7 +95,9 @@ export class AppDiagramDurable extends EventTarget {
 	 * @param {PresenterShapeUpdateParam} param
 	 * @returns {void}
 	 */
-	shapeUpdate(shape, param) { this._diagram.shapeUpdate(shape, param); }
+	shapeUpdate(shape, param) { 
+		console.log(param);	
+		this._diagram.shapeUpdate(shape, param); }
 
 	/**
 	 * @param {IDiagramShape} shape
