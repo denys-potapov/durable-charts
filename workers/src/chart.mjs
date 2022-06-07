@@ -1,66 +1,3 @@
-// This is the Edge Chat Demo Worker, built using Durable Objects!
-
-// ===============================
-// Introduction to Modules
-// ===============================
-//
-// The first thing you might notice, if you are familiar with the Workers platform, is that this
-// Worker is written differently from others you may have seen. It even has a different file
-// extension. The `mjs` extension means this JavaScript is an ES Module, which, among other things,
-// means it has imports and exports. Unlike other Workers, this code doesn't use
-// `addEventListener("fetch", handler)` to register its main HTTP handler; instead, it _exports_
-// a handler, as we'll see below.
-//
-// This is a new way of writing Workers that we expect to introduce more broadly in the future. We
-// like this syntax because it is *composable*: You can take two workers written this way and
-// merge them into one worker, by importing the two Workers' exported handlers yourself, and then
-// exporting a new handler that call into the other Workers as appropriate.
-//
-// This new syntax is required when using Durable Objects, because your Durable Objects are
-// implemented by classes, and those classes need to be exported. The new syntax can be used for
-// writing regular Workers (without Durable Objects) too, but for now, you must be in the Durable
-// Objects beta to be able to use the new syntax, while we work out the quirks.
-//
-// To see an example configuration for uploading module-based Workers, check out the wrangler.toml
-// file or one of our Durable Object templates for Wrangler:
-//   * https://github.com/cloudflare/durable-objects-template
-//   * https://github.com/cloudflare/durable-objects-rollup-esm
-//   * https://github.com/cloudflare/durable-objects-webpack-commonjs
-
-// ===============================
-// Required Environment
-// ===============================
-//
-// This worker, when deployed, must be configured with two environment bindings:
-// * rooms: A Durable Object namespace binding mapped to the ChatRoom class.
-// * limiters: A Durable Object namespace binding mapped to the RateLimiter class.
-//
-// Incidentally, in pre-modules Workers syntax, "bindings" (like KV bindings, secrets, etc.)
-// appeared in your script as global variables, but in the new modules syntax, this is no longer
-// the case. Instead, bindings are now delivered in an "environment object" when an event handler
-// (or Durable Object class constructor) is called. Look for the variable `env` below.
-//
-// We made this change, again, for composability: The global scope is global, but if you want to
-// call into existing code that has different environment requirements, then you need to be able
-// to pass the environment as a parameter instead.
-//
-// Once again, see the wrangler.toml file to understand how the environment is configured.
-
-// =======================================================================================
-// The regular Worker part...
-//
-// This section of the code implements a normal Worker that receives HTTP requests from external
-// clients. This part is stateless.
-
-// With the introduction of modules, we're experimenting with allowing text/data blobs to be
-// uploaded and exposed as synthetic modules. In wrangler.toml we specify a rule that files ending
-// in .html should be uploaded as "Data", equivalent to content-type `application/octet-stream`.
-// So when we import it as `HTML` here, we get the HTML content as an `ArrayBuffer`. This lets us
-// serve our app's static asset without relying on any separate storage. (However, the space
-// available for assets served this way is very limited; larger sites should continue to use Workers
-// KV to serve assets.)
-import HTML from "chat.html";
-
 // `handleErrors()` is a little utility function that can wrap an HTTP request handler in a
 // try/catch and return errors to the client. You probably wouldn't want to use this in production
 // code but it is convenient when debugging and iterating.
@@ -200,13 +137,7 @@ async function handleApiRequest(path, request, env) {
   }
 }
 
-// =======================================================================================
-// The ChatRoom Durable Object Class
-
-// ChatRoom implements a Durable Object that coordinates an individual chat room. Participants
-// connect to the room using WebSockets, and the room broadcasts messages from each participant
-// to all others.
-export class ChatRoom {
+export class Chart {
   constructor(controller, env) {
     // `controller.storage` provides access to our durable storage. It provides a simple KV
     // get()/put() interface.
@@ -271,12 +202,6 @@ export class ChatRoom {
     // WebSocket in JavaScript, not sending it elsewhere.
     webSocket.accept();
 
-    // Set up our rate limiter client.
-    let limiterId = this.env.limiters.idFromName(ip);
-    let limiter = new RateLimiterClient(
-        () => this.env.limiters.get(limiterId),
-        err => webSocket.close(1011, err.stack));
-
     // Create our session and add it to the sessions list.
     // We don't send any messages to the client until it has sent us the initial user info
     // message. Until then, we will queue messages in `session.blockedMessages`.
@@ -310,14 +235,6 @@ export class ChatRoom {
           // throw, and whatever, at least we won't accept the message. (This probably can't
           // actually happen. This is defensive coding.)
           webSocket.close(1011, "WebSocket broken.");
-          return;
-        }
-
-        // Check if the user is over their rate limit and reject the message if so.
-        if (!limiter.checkLimit()) {
-          webSocket.send(JSON.stringify({
-            error: "Your IP is being rate-limited, please try again later."
-          }));
           return;
         }
 
@@ -431,113 +348,5 @@ export class ChatRoom {
         this.broadcast({quit: quitter.name});
       }
     });
-  }
-}
-
-// =======================================================================================
-// The RateLimiter Durable Object class.
-
-// RateLimiter implements a Durable Object that tracks the frequency of messages from a particular
-// source and decides when messages should be dropped because the source is sending too many
-// messages.
-//
-// We utilize this in ChatRoom, above, to apply a per-IP-address rate limit. These limits are
-// global, i.e. they apply across all chat rooms, so if a user spams one chat room, they will find
-// themselves rate limited in all other chat rooms simultaneously.
-export class RateLimiter {
-  constructor(controller, env) {
-    // Timestamp at which this IP will next be allowed to send a message. Start in the distant
-    // past, i.e. the IP can send a message now.
-    this.nextAllowedTime = 0;
-  }
-
-  // Our protocol is: POST when the IP performs an action, or GET to simply read the current limit.
-  // Either way, the result is the number of seconds to wait before allowing the IP to perform its
-  // next action.
-  async fetch(request) {
-    return await handleErrors(request, async () => {
-      let now = Date.now() / 1000;
-
-      this.nextAllowedTime = Math.max(now, this.nextAllowedTime);
-
-      if (request.method == "POST") {
-        // POST request means the user performed an action.
-        // We allow one action per 5 seconds.
-        this.nextAllowedTime += 5;
-      }
-
-      // Return the number of seconds that the client needs to wait.
-      //
-      // We provide a "grace" period of 20 seconds, meaning that the client can make 4-5 requests
-      // in a quick burst before they start being limited.
-      let cooldown = Math.max(0, this.nextAllowedTime - now - 20);
-      return new Response(cooldown);
-    })
-  }
-}
-
-// RateLimiterClient implements rate limiting logic on the caller's side.
-class RateLimiterClient {
-  // The constructor takes two functions:
-  // * getLimiterStub() returns a new Durable Object stub for the RateLimiter object that manages
-  //   the limit. This may be called multiple times as needed to reconnect, if the connection is
-  //   lost.
-  // * reportError(err) is called when something goes wrong and the rate limiter is broken. It
-  //   should probably disconnect the client, so that they can reconnect and start over.
-  constructor(getLimiterStub, reportError) {
-    this.getLimiterStub = getLimiterStub;
-    this.reportError = reportError;
-
-    // Call the callback to get the initial stub.
-    this.limiter = getLimiterStub();
-
-    // When `inCooldown` is true, the rate limit is currently applied and checkLimit() will return
-    // false.
-    this.inCooldown = false;
-  }
-
-  // Call checkLimit() when a message is received to decide if it should be blocked due to the
-  // rate limit. Returns `true` if the message should be accepted, `false` to reject.
-  checkLimit() {
-    if (this.inCooldown) {
-      return false;
-    }
-    this.inCooldown = true;
-    this.callLimiter();
-    return true;
-  }
-
-  // callLimiter() is an internal method which talks to the rate limiter.
-  async callLimiter() {
-    try {
-      let response;
-      try {
-        // Currently, fetch() needs a valid URL even though it's not actually going to the
-        // internet. We may loosen this in the future to accept an arbitrary string. But for now,
-        // we have to provide a dummy URL that will be ignored at the other end anyway.
-        response = await this.limiter.fetch("https://dummy-url", {method: "POST"});
-      } catch (err) {
-        // `fetch()` threw an exception. This is probably because the limiter has been
-        // disconnected. Stubs implement E-order semantics, meaning that calls to the same stub
-        // are delivered to the remote object in order, until the stub becomes disconnected, after
-        // which point all further calls fail. This guarantee makes a lot of complex interaction
-        // patterns easier, but it means we must be prepared for the occasional disconnect, as
-        // networks are inherently unreliable.
-        //
-        // Anyway, get a new limiter and try again. If it fails again, something else is probably
-        // wrong.
-        this.limiter = this.getLimiterStub();
-        response = await this.limiter.fetch("https://dummy-url", {method: "POST"});
-      }
-
-      // The response indicates how long we want to pause before accepting more requests.
-      let cooldown = +(await response.text());
-      await new Promise(resolve => setTimeout(resolve, cooldown * 1000));
-
-      // Done waiting.
-      this.inCooldown = false;
-    } catch (err) {
-      this.reportError(err);
-    }
   }
 }

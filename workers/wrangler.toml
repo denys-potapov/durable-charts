@@ -1,4 +1,4 @@
-name = "edge-chat-demo"
+name = "durable-charts"
 type = "javascript"
 workers_dev = true
 compatibility_date = "2021-11-08"
@@ -8,16 +8,13 @@ account_id = ""
 [build.upload]
 format = "modules"
 dir = "src"
-main = "./chat.mjs"
-rules = [{type = "Data", globs = ["**/*.html"]}]
+main = "./chart.mjs"
 
 [durable_objects]
 bindings = [
-  { name = "rooms", class_name = "ChatRoom" },
-  { name = "limiters", class_name = "RateLimiter" }
+  { name = "charts", class_name = "Chart" }
 ]
 
-# Indicate that you want the ChatRoom and RateLimiter classes to be callable as Durable Objects.
 [[migrations]]
 tag = "v1" # Should be unique for each entry
-new_classes = ["ChatRoom", "RateLimiter"]
+new_classes = ["Chart"]
