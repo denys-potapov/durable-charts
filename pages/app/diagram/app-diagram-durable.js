@@ -16,11 +16,7 @@ export class AppDiagramDurable extends EventTarget {
 		this._shapes = {};
 		this._ids = new Map();
 
-		/**
-		 * @type {IDiagramEventConnectDetail[]}
-		 * @private
-		 */
-		this._connectors = [];
+		this._connectors = new Map();
 
 		/** @private */
 		this._diagram = diagram
@@ -61,10 +57,18 @@ export class AppDiagramDurable extends EventTarget {
 				}));
 				break;
 			case 'connect':
-				this._connectors.push(evt.detail);
+				var cc = evt.detail;
+				var param = {
+					s: { i: this._ids.get(cc.start.shape), c: cc.start.key },
+					e: { i: this._ids.get(cc.end.shape), c: cc.end.key }
+				}
+				this._connectors.set(param, 1);
+				return this.dispatchEvent(new CustomEvent('connect', {
+					detail: param
+				}));
 				break;
 			case 'disconnect':
-				this._connectors.splice(this._connectors.findIndex(el => connectorEqual(el, evt.detail)), 1);
+				// this._connectors.splice(this._connectors.findIndex(el => connectorEqual(el, evt.detail)), 1);
 				break;
 		}
 	}
@@ -126,6 +130,18 @@ export class AppDiagramDurable extends EventTarget {
 		}
 	}
 
+	connect(param) {
+		const start = this._shapes[param.s.i];
+		const end = this._shapes[param.e.i];
+		if (this._connectors.get(param)) {
+			return;
+		}
+		this._diagram.shapeConnect({
+			start: { shape: start, connector: param.s.c },
+			end: { shape: end, connector: param.e.c }
+		});
+	}
+
 	/**
 	 * @param {IDiagramShape} shape
 	 * @param {Point} offsetPoint
@@ -140,34 +156,6 @@ export class AppDiagramDurable extends EventTarget {
 		}
 	}
 
-	/** @returns {AppSerializeData} */
-	dataGet() {
-		if (!this._shapeData || this._shapeData.size === 0) {
-			return null;
-		}
-
-		/** @type {AppSerializeData} */
-		const serializeData = {
-			s: []
-		};
-
-		/** @type {Map<IDiagramShape, number>} */
-		const shapeIndex = new Map();
-
-		for (const shape of this._shapeData) {
-			/** @type {AppSerializeShape} */(shape[1]).position = shape[0].positionGet();
-			shapeIndex.set(shape[0], serializeData.s.push(/** @type {AppSerializeShape} */(shape[1])) - 1);
-		}
-
-		if (this._connectors && this._connectors.length > 0) {
-			serializeData.c = this._connectors.map(cc => ({
-				s: { i: shapeIndex.get(cc.start.shape), c: cc.start.key },
-				e: { i: shapeIndex.get(cc.end.shape), c: cc.end.key }
-			}));
-		}
-
-		return serializeData;
-	}
 
 	/**
 	 * @param {AppSerializeData} data
@@ -193,10 +181,7 @@ export class AppDiagramDurable extends EventTarget {
 
 		if (data.c && data.c.length > 0) {
 			for (const conJson of data.c) {
-				this._diagram.shapeConnect({
-					start: { shape: shapes[conJson.s.i], connector: conJson.s.c },
-					end: { shape: shapes[conJson.e.i], connector: conJson.e.c }
-				});
+
 
 				this._connectors.push({
 					start: { type: 'connector', key: conJson.s.c, shape: shapes[conJson.s.i] },

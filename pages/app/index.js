@@ -38,10 +38,12 @@ function start() {
   });
 
   diagram.on('update', event => {
-    console.log(event);
     send({type: 'update', msg: event.detail});
   });
 
+  diagram.on('connect', event => {
+    send({type: 'connect', msg: event.detail});
+  });
   join();
 }
 
@@ -80,6 +82,9 @@ function join() {
             break;
         case 'update':
             diagram.shapeUpdate(data.msg);
+            break;
+        case 'connect':
+            diagram.connect(data.msg);
             break;
     };
   });  
