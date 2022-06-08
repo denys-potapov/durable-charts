@@ -156,41 +156,6 @@ export class AppDiagramDurable extends EventTarget {
 		}
 	}
 
-
-	/**
-	 * @param {AppSerializeData} data
-	 * @returns {void}
-	 */
-	dataSet(data) {
-		this.clear();
-		if (!(data.s && data.s.length > 0)) { return; }
-
-		/** @type {IDiagramShape[]} */
-		const shapes = [];
-
-		for (const shapeJson of data.s) {
-			const shape = this.shapeAdd({
-				templateKey: shapeJson.templateKey,
-				position: shapeJson.position,
-				props: {
-					text: { textContent: shapeJson.detail }
-				}
-			});
-			shapes.push(shape);
-		}
-
-		if (data.c && data.c.length > 0) {
-			for (const conJson of data.c) {
-
-
-				this._connectors.push({
-					start: { type: 'connector', key: conJson.s.c, shape: shapes[conJson.s.i] },
-					end: { type: 'connector', key: conJson.e.c, shape: shapes[conJson.e.i] }
-				});
-			}
-		}
-	}
-
 	/**
 	 * subscribe to event
 	 * @param {AppDiagramEventType} evtType
@@ -200,14 +165,4 @@ export class AppDiagramDurable extends EventTarget {
 		this.addEventListener(evtType, listener);
 		return this;
 	}
-}
-
-/**
- * @param {IDiagramEventConnectDetail} con1
- * @param {IDiagramEventConnectDetail} con2
- * @returns {boolean}
- */
-function connectorEqual(con1, con2) {
-	return con1.start.shape === con2.start.shape && con1.start.key === con2.start.key &&
-	con1.end.shape === con2.end.shape && con1.end.key === con2.end.key;
 }
