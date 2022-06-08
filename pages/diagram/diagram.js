@@ -40,6 +40,7 @@ export class Diagram extends EventTarget {
 	 * @returns {IPresenterShape}
 	 */
 	shapeAdd(param) {
+		console.log('add', param);
 		const shape = /** @type{IPresenterShape} */(this._presenter.append('shape', param));
 		this._dispatchEvent('add', { target: shape, param: param });
 		return shape;
@@ -50,6 +51,7 @@ export class Diagram extends EventTarget {
 	 * @param {PresenterShapeUpdateParam} param
 	 */
 	shapeUpdate(shape, param) {
+		console.log('shapeUpdate', param);
 		shape.update(param);
 		if (param.position || param.connectors) {
 			this._connectorManager.updatePosition(shape);
@@ -90,12 +92,13 @@ export class Diagram extends EventTarget {
 				}
 
 				if (this._movedShape) {
-					this._movedShape.update({
-						position: {
-							x: this._movedDelta.x + evt.detail.clientX,
-							y: this._movedDelta.y + evt.detail.clientY
-						}
-					});
+					const position = {
+						x: this._movedDelta.x + evt.detail.clientX,
+						y: this._movedDelta.y + evt.detail.clientY
+					}
+					
+					this._movedShape.update({position: position});
+					console.log('move', position);
 					this._connectorManager.updatePosition(this._movedShape);
 				}
 				break;

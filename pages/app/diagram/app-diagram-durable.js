@@ -31,8 +31,6 @@ export class AppDiagramDurable extends EventTarget {
 	 * @param {CustomEvent<ShapeTextEditorDecoratorEventUpdateDetail> & CustomEvent<IDiagramEventConnectDetail>} evt
 	 */
 	handleEvent(evt) {
-		console.log(evt, this._shapeData.get(evt.detail.target));
-		console.log(this._shapeData);
 		switch (evt.type) {
 			case 'add':
 				/** @type {IShapeTextEditorDecorator} */(evt.detail.target)
