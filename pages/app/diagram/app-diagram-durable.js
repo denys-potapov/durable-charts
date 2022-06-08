@@ -13,6 +13,8 @@ export class AppDiagramDurable extends EventTarget {
 		 * @private
 		 */
 		this._shapeData = new Map();
+		this._shapes = {};
+		this._ids = new Map();
 
 		/**
 		 * @type {IDiagramEventConnectDetail[]}
@@ -24,7 +26,8 @@ export class AppDiagramDurable extends EventTarget {
 		this._diagram = diagram
 			.on('connect', this)
 			.on('disconnect', this)
-			.on('add', this);
+			.on('add', this)
+			.on('move', this);
 	}
 
 	/**
@@ -39,11 +42,23 @@ export class AppDiagramDurable extends EventTarget {
 					.on('del', this);
 				break;
 			case 'txtUpd':
-				this._shapeData.get(evt.detail.target).detail =
-					/** @type {string} */ (evt.detail.props.text.textContent);
+				var param = {
+					id: this._ids.get(evt.detail.target),
+					props: evt.detail.props
+				}
+				return this.dispatchEvent(new CustomEvent('update', {
+					detail: param
+				}));
 				break;
 			case 'del':
 				this._shapeDel(evt.detail.target);
+				break;
+			case 'move':
+				var param = evt.detail.param;
+				param.id = this._ids.get(evt.detail.target);
+				return this.dispatchEvent(new CustomEvent('update', {
+					detail: param
+				}));
 				break;
 			case 'connect':
 				this._connectors.push(evt.detail);
@@ -70,8 +85,17 @@ export class AppDiagramDurable extends EventTarget {
 	 * @returns {IDiagramShape}
 	 */
 	shapeAdd(param, dispatch = true) {
-		const shape = this._diagram.shapeAdd(param);
+		if (!param.id) {
+			param.id = Math.random().toString();
+		}
 
+		if (this._shapes[param.id]) {
+			return ;
+		}
+
+		const shape = this._diagram.shapeAdd(param);
+		this._shapes[param.id] = shape;
+		this._ids.set(shape, param.id);
 		this._shapeData.set(
 			shape,
 			{
@@ -95,9 +119,12 @@ export class AppDiagramDurable extends EventTarget {
 	 * @param {PresenterShapeUpdateParam} param
 	 * @returns {void}
 	 */
-	shapeUpdate(shape, param) { 
-		console.log(param);	
-		this._diagram.shapeUpdate(shape, param); }
+	shapeUpdate(param) { 
+		const shape = this._shapes[param.id];
+		if (shape) {
+			this._diagram.shapeUpdate(shape, param);
+		}
+	}
 
 	/**
 	 * @param {IDiagramShape} shape

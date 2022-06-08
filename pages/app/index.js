@@ -34,8 +34,12 @@ function start() {
   document.location.hash = "#" + roomname;
 
   diagram.on('shapeAdd', event => {
-    console.log(event);
     send({type: 'add', msg: event.detail});
+  });
+
+  diagram.on('update', event => {
+    console.log(event);
+    send({type: 'update', msg: event.detail});
   });
 
   join();
@@ -73,6 +77,9 @@ function join() {
     switch (data.type) {
         case 'add':
             diagram.shapeAdd(data.msg, false);
+            break;
+        case 'update':
+            diagram.shapeUpdate(data.msg);
             break;
     };
   });  

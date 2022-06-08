@@ -55,7 +55,6 @@ export class Diagram extends EventTarget {
 	 * @param {PresenterShapeUpdateParam} param
 	 */
 	shapeUpdate(shape, param) {
-		console.log('shapeUpdate', param);
 		shape.update(param);
 		if (param.position || param.connectors) {
 			this._connectorManager.updatePosition(shape);
@@ -100,10 +99,10 @@ export class Diagram extends EventTarget {
 						x: this._movedDelta.x + evt.detail.clientX,
 						y: this._movedDelta.y + evt.detail.clientY
 					}
-					
+
 					this._movedShape.update({position: position});
-					// console.log('move', position);
 					this._connectorManager.updatePosition(this._movedShape);
+					this._dispatchEvent('move', { target: this._movedShape, param: {position: position} });
 				}
 				break;
 			case 'pointerdown':
