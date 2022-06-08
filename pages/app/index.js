@@ -24,13 +24,18 @@ let currentWebSocket = null;
 let roomname = 'public';
 let hostname = "durable-charts.denys-potapov.workers.dev";
 
+function send(msg) {
+    if (currentWebSocket) {
+        currentWebSocket.send(JSON.stringify(msg));
+    }
+}
+
 function start() {
   document.location.hash = "#" + roomname;
 
   diagram.on('shapeAdd', event => {
-    if (currentWebSocket) {
-        currentWebSocket.send(JSON.stringify({added: "add"}));
-    }
+    console.log(event);
+    send({type: 'add', msg: event.detail});
   });
 
   join();
@@ -64,7 +69,12 @@ function join() {
 
   ws.addEventListener("message", event => {
     let data = JSON.parse(event.data);
-    console.log('ws message', event.data);
+    console.log('ws message', data);
+    switch (data.type) {
+        case 'add':
+            diagram.shapeAdd(data.msg, false);
+            break;
+    };
   });  
   ws.addEventListener("close", event => {
     console.log("WebSocket closed, reconnecting:", event.code, event.reason);

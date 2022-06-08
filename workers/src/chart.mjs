@@ -58,13 +58,13 @@ async function handleApiRequest(path, request, env) {
   // We've received at API request. Route the request based on the path.
 
   switch (path[0]) {
-    case "room": {
-      // Request for `/api/room/...`.
+    case "chart": {
+      // Request for `/api/chart/...`.
 
       if (!path[1]) {
-        // The request is for just "/api/room", with no ID.
+        // The request is for just "/api/chart", with no ID.
         if (request.method == "POST") {
-          // POST to /api/room creates a private room.
+          // POST to /api/chart creates a private chart.
           //
           // Incidentally, this code doesn't actually store anything. It just generates a valid
           // unique ID for this namespace. Each durable object namespace has its own ID space, but
@@ -77,24 +77,15 @@ async function handleApiRequest(path, request, env) {
           // world -- i.e., there is no way that someone in the UK and someone in New Zealand
           // could coincidentally create the same ID at the same time, because unique IDs are,
           // well, unique!
-          let id = env.rooms.newUniqueId();
+          let id = env.charts.newUniqueId();
           return new Response(id.toString(), {headers: {"Access-Control-Allow-Origin": "*"}});
         } else {
-          // If we wanted to support returning a list of public rooms, this might be a place to do
-          // it. The list of room names might be a good thing to store in KV, though a singleton
-          // Durable Object is also a possibility as long as the Cache API is used to cache reads.
-          // (A caching layer would be needed because a single Durable Object is single-threaded,
-          // so the amount of traffic it can handle is limited. Also, caching would improve latency
-          // for users who don't happen to be located close to the singleton.)
-          //
-          // For this demo, though, we're not implementing a public room list, mainly because
-          // inevitably some trolls would probably register a bunch of offensive room names. Sigh.
           return new Response("Method not allowed", {status: 405});
         }
       }
 
-      // OK, the request is for `/api/room/<name>/...`. It's time to route to the Durable Object
-      // for the specific room.
+      // OK, the request is for `/api/chart/<name>/...`. It's time to route to the Durable Object
+      // for the specific chart.
       let name = path[1];
 
       // Each Durable Object has a 256-bit unique ID. IDs can be derived from string names, or
@@ -102,26 +93,26 @@ async function handleApiRequest(path, request, env) {
       let id;
       if (name.match(/^[0-9a-f]{64}$/)) {
         // The name is 64 hex digits, so let's assume it actually just encodes an ID. We use this
-        // for private rooms. `idFromString()` simply parses the text as a hex encoding of the raw
+        // for private chart. `idFromString()` simply parses the text as a hex encoding of the raw
         // ID (and verifies that this is a valid ID for this namespace).
-        id = env.rooms.idFromString(name);
+        id = env.charts.idFromString(name);
       } else if (name.length <= 32) {
-        // Treat as a string room name (limited to 32 characters). `idFromName()` consistently
+        // Treat as a string chart name (limited to 32 characters). `idFromName()` consistently
         // derives an ID from a string.
-        id = env.rooms.idFromName(name);
+        id = env.charts.idFromName(name);
       } else {
         return new Response("Name too long", {status: 404});
       }
 
-      // Get the Durable Object stub for this room! The stub is a client object that can be used
+      // Get the Durable Object stub for this chart! The stub is a client object that can be used
       // to send messages to the remote Durable Object instance. The stub is returned immediately;
       // there is no need to await it. This is important because you would not want to wait for
       // a network round trip before you could start sending requests. Since Durable Objects are
       // created on-demand when the ID is first used, there's nothing to wait for anyway; we know
       // an object will be available somewhere to receive our requests.
-      let roomObject = env.rooms.get(id);
+      let chartObject = env.charts.get(id);
 
-      // Compute a new URL with `/api/room/<name>` removed. We'll forward the rest of the path
+      // Compute a new URL with `/api/chart/<name>` removed. We'll forward the rest of the path
       // to the Durable Object.
       let newUrl = new URL(request.url);
       newUrl.pathname = "/" + path.slice(2).join("/");
@@ -129,7 +120,7 @@ async function handleApiRequest(path, request, env) {
       // Send the request to the object. The `fetch()` method of a Durable Object stub has the
       // same signature as the global `fetch()` function, but the request is always sent to the
       // object, regardless of the request's URL.
-      return roomObject.fetch(newUrl, request);
+      return chartObject.fetch(newUrl, request);
     }
 
     default:
@@ -149,12 +140,6 @@ export class Chart {
     // We will put the WebSocket objects for each client, along with some metadata, into
     // `sessions`.
     this.sessions = [];
-
-    // We keep track of the last-seen message's timestamp just so that we can assign monotonically
-    // increasing timestamps even if multiple messages arrive simultaneously (see below). There's
-    // no need to store this to disk since we assume if the object is destroyed and recreated, much
-    // more than a millisecond will have gone by.
-    this.lastTimestamp = 0;
   }
 
   // The system will call fetch() whenever an HTTP request is sent to this Object. Such requests
@@ -167,7 +152,7 @@ export class Chart {
 
       switch (url.pathname) {
         case "/websocket": {
-          // The request is to `/api/room/<name>/websocket`. A client is trying to establish a new
+          // The request is to `/api/chart/<name>/websocket`. A client is trying to establish a new
           // WebSocket session.
           if (request.headers.get("Upgrade") != "websocket") {
             return new Response("expected websocket", {status: 400});
@@ -208,24 +193,16 @@ export class Chart {
     let session = {webSocket, blockedMessages: []};
     this.sessions.push(session);
 
-    // Queue "join" messages for all online users, to populate the client's roster.
-    this.sessions.forEach(otherSession => {
-      if (otherSession.name) {
-        session.blockedMessages.push(JSON.stringify({joined: otherSession.name}));
-      }
-    });
-
-    // Load the last 100 messages from the chat history stored on disk, and send them to the
-    // client.
-    let storage = await this.storage.list({reverse: true, limit: 100});
-    let backlog = [...storage.values()];
-    backlog.reverse();
-    backlog.forEach(value => {
-      session.blockedMessages.push(value);
-    });
+    // // Load the last 100 messages from the chat history stored on disk, and send them to the
+    // // client.
+    // let storage = await this.storage.list({reverse: true, limit: 100});
+    // let backlog = [...storage.values()];
+    // backlog.reverse();
+    // backlog.forEach(value => {
+    //   session.blockedMessages.push(value);
+    // });
 
     // Set event handlers to receive messages.
-    let receivedUserInfo = false;
     webSocket.addEventListener("message", async msg => {
       try {
         if (session.quit) {
@@ -238,62 +215,11 @@ export class Chart {
           return;
         }
 
-        // I guess we'll use JSON.
-        let data = JSON.parse(msg.data);
-
-        if (!receivedUserInfo) {
-          // The first message the client sends is the user info message with their name. Save it
-          // into their session object.
-          session.name = "" + (data.name || "anonymous");
-
-          // Don't let people use ridiculously long names. (This is also enforced on the client,
-          // so if they get here they are not using the intended client.)
-          if (session.name.length > 32) {
-            webSocket.send(JSON.stringify({error: "Name too long."}));
-            webSocket.close(1009, "Name too long.");
-            return;
-          }
-
-          // Deliver all the messages we queued up since the user connected.
-          session.blockedMessages.forEach(queued => {
-            webSocket.send(queued);
-          });
-          delete session.blockedMessages;
-
-          // Broadcast to all other connections that this user has joined.
-          this.broadcast({joined: session.name});
-
-          webSocket.send(JSON.stringify({ready: true}));
-
-          // Note that we've now received the user info message.
-          receivedUserInfo = true;
-
-          return;
-        }
-
-        // Construct sanitized message for storage and broadcast.
-        data = { name: session.name, message: "" + data.message };
-
-        // Block people from sending overly long messages. This is also enforced on the client,
-        // so to trigger this the user must be bypassing the client code.
-        if (data.message.length > 256) {
-          webSocket.send(JSON.stringify({error: "Message too long."}));
-          return;
-        }
-
-        // Add timestamp. Here's where this.lastTimestamp comes in -- if we receive a bunch of
-        // messages at the same time (or if the clock somehow goes backwards????), we'll assign
-        // them sequential timestamps, so at least the ordering is maintained.
-        data.timestamp = Math.max(Date.now(), this.lastTimestamp + 1);
-        this.lastTimestamp = data.timestamp;
-
-        // Broadcast the message to all other WebSockets.
-        let dataStr = JSON.stringify(data);
-        this.broadcast(dataStr);
+        this.broadcast(msg.data);
 
         // Save message.
-        let key = new Date(data.timestamp).toISOString();
-        await this.storage.put(key, dataStr);
+        // let key = new Date(data.timestamp).toISOString();
+        // await this.storage.put(key, dataStr);
       } catch (err) {
         // Report any exceptions directly back to the client. As with our handleErrors() this
         // probably isn't what you'd want to do in production, but it's convenient when testing.
@@ -306,9 +232,6 @@ export class Chart {
     let closeOrErrorHandler = evt => {
       session.quit = true;
       this.sessions = this.sessions.filter(member => member !== session);
-      if (session.name) {
-        this.broadcast({quit: session.name});
-      }
     };
     webSocket.addEventListener("close", closeOrErrorHandler);
     webSocket.addEventListener("error", closeOrErrorHandler);
@@ -324,7 +247,6 @@ export class Chart {
     // Iterate over all the sessions sending them messages.
     let quitters = [];
     this.sessions = this.sessions.filter(session => {
-      if (session.name) {
         try {
           session.webSocket.send(message);
           return true;
@@ -332,21 +254,8 @@ export class Chart {
           // Whoops, this connection is dead. Remove it from the list and arrange to notify
           // everyone below.
           session.quit = true;
-          quitters.push(session);
           return false;
         }
-      } else {
-        // This session hasn't sent the initial user info message yet, so we're not sending them
-        // messages yet (no secret lurking!). Queue the message to be sent later.
-        session.blockedMessages.push(message);
-        return true;
-      }
-    });
-
-    quitters.forEach(quitter => {
-      if (quitter.name) {
-        this.broadcast({quit: quitter.name});
-      }
     });
   }
 }
