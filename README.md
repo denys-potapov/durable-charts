@@ -2,6 +2,10 @@
 
 Collaborative charts editor with durable objects.
 
+See the video, or try it yourself https://charts.pages.dev/app/#playground
+
+https://user-images.githubusercontent.com/2123712/172528168-8359d9ef-16e8-4a37-aa11-5610e64cc1b0.mov
+
 ## Components and deploy
 
 - Fronend is CF pages
