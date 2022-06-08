@@ -140,6 +140,9 @@ export class Chart {
     // We will put the WebSocket objects for each client, along with some metadata, into
     // `sessions`.
     this.sessions = [];
+
+    this.shapes = {};
+    this.connects = [];
   }
 
   // The system will call fetch() whenever an HTTP request is sent to this Object. Such requests
@@ -190,12 +193,12 @@ export class Chart {
     // Create our session and add it to the sessions list.
     // We don't send any messages to the client until it has sent us the initial user info
     // message. Until then, we will queue messages in `session.blockedMessages`.
-    let session = {webSocket, blockedMessages: []};
+    let session = {webSocket};
     this.sessions.push(session);
 
     // // Load the last 100 messages from the chat history stored on disk, and send them to the
     // // client.
-    // let storage = await this.storage.list({reverse: true, limit: 100});
+    // let storage = ({reverse: true, limit: 100});
     // let backlog = [...storage.values()];
     // backlog.reverse();
     // backlog.forEach(value => {
@@ -206,11 +209,6 @@ export class Chart {
     webSocket.addEventListener("message", async msg => {
       try {
         if (session.quit) {
-          // Whoops, when trying to send to this WebSocket in the past, it threw an exception and
-          // we marked it broken. But somehow we got another message? I guess try sending a
-          // close(), which might throw, in which case we'll try to send an error, which will also
-          // throw, and whatever, at least we won't accept the message. (This probably can't
-          // actually happen. This is defensive coding.)
           webSocket.close(1011, "WebSocket broken.");
           return;
         }
