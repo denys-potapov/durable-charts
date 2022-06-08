@@ -23,6 +23,7 @@ let currentWebSocket = null;
 
 let roomname = 'public';
 let hostname = "durable-charts.denys-potapov.workers.dev";
+// hostname = "localhost:8787";
 
 function send(msg) {
     if (currentWebSocket) {
@@ -96,6 +97,12 @@ function join() {
     console.log("WebSocket error, reconnecting:", event);
     rejoin();
   });
+}
+
+if (document.location.hash.length > 1) {
+  roomname = document.location.hash.slice(1);
+} else {
+  roomname = Math.random().toString();
 }
 
 start();
